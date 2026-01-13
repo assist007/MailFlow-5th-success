@@ -1,0 +1,8 @@
+{
+  "name": "Email System",
+  "description": "A secure, scalable custom email inbox system with multi-tenant domain support, role-based access, and modern Gmail-style interface.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
