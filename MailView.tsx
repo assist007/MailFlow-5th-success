@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { 
   Search, CheckSquare, Square, Trash2, Loader2, ChevronLeft, 
-  Sparkles, Star, Clock, Mail, ShieldCheck, MoreHorizontal, Filter
+  Sparkles, Star, Clock, Mail, ShieldCheck, MoreHorizontal, Filter, RefreshCw
 } from 'lucide-react';
 import { Email, Thread, EmailFolder, User } from './types';
 import { summarizeThread } from './services/geminiService';
@@ -94,6 +94,14 @@ export const MailView: React.FC<MailViewProps> = ({
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter">Conversations</h2>
             <div className="flex gap-2">
+              <button 
+                onClick={onReload}
+                disabled={isLoading}
+                className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all disabled:opacity-50"
+                title="Refresh emails"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </button>
               <button className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"><Filter className="w-4 h-4" /></button>
               <button className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"><MoreHorizontal className="w-4 h-4" /></button>
             </div>

@@ -12,7 +12,7 @@ interface SidebarProps {
   sidebarMode: 'expanded' | 'collapsed' | 'hover';
   onSetSidebarMode: (mode: 'expanded' | 'collapsed' | 'hover') => void;
   unreadCount: number;
-  onSetView: (view: 'home' | 'mail' | 'admin' | 'settings') => void;
+  onSetView: (view: 'info' | 'home' | 'mail' | 'admin' | 'settings') => void;
   onSetFolder: (folder: EmailFolder) => void;
   onOpenConfig: () => void;
   onOpenCompose: () => void;
@@ -83,7 +83,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       className={`h-full ${sidebarWidthClass} border-r border-slate-200/60 dark:border-slate-800/60 flex flex-col bg-white dark:bg-slate-900 transition-all duration-300 shadow-xl dark:shadow-none shrink-0 relative z-50`}
     >
       {/* Brand Header */}
-      <div className={`p-6 flex items-center gap-3 min-h-[80px] shrink-0 ${isCurrentlyCollapsed ? 'justify-center' : ''}`}>
+      <button
+        onClick={() => onSetView('info')}
+        className={`p-6 flex items-center gap-3 min-h-[80px] shrink-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isCurrentlyCollapsed ? 'justify-center' : ''} w-full`}
+      >
         <div className="relative shrink-0">
           <div className="absolute inset-0 bg-blue-600 blur-lg opacity-40 rounded-full animate-pulse" />
           <div className="relative bg-gradient-to-br from-blue-500 to-blue-700 p-2.5 rounded-xl">
@@ -96,7 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mt-1 block">Easy Cloud Mail</span>
           </div>
         )}
-      </div>
+      </button>
 
       <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar overflow-x-hidden p-4 lg:p-5">
         {/* Action Button */}

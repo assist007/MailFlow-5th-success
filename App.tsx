@@ -17,6 +17,7 @@ import { Sidebar } from './Sidebar';
 import { MailView } from './MailView';
 import { InfrastructureView } from './InfrastructureView';
 import { DashboardView } from './DashboardView';
+import { InfoView } from './InfoView';
 import { SettingsView } from './SettingsView';
 import { Modals } from './Modals';
 
@@ -30,7 +31,7 @@ const App: React.FC = () => {
   const [stats, setStats] = useState({ domains: 0, addresses: 0, emails: 0 });
   const [selectedDomain, setSelectedDomain] = useState<EmailDomain | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-  const [view, setView] = useState<'home' | 'mail' | 'admin' | 'settings'>('home');
+  const [view, setView] = useState<'info' | 'home' | 'mail' | 'admin' | 'settings'>('info');
   const [isLoading, setIsLoading] = useState(true);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('mailflow_theme') as 'light' | 'dark') || 'light');
   const [sidebarMode, setSidebarMode] = useState<'expanded' | 'collapsed' | 'hover'>(() => (localStorage.getItem('mailflow_sidebar_mode') as any) || 'expanded');
@@ -73,6 +74,33 @@ const App: React.FC = () => {
     localStorage.setItem('mailflow_supabase_url', settingsUrl);
     localStorage.setItem('mailflow_supabase_key', settingsKey);
   };
+
+  // Handle URL hash navigation
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash === '#/info' || hash === '') {
+        setView(hash === '' ? 'info' : 'info');
+      } else if (hash === '#/' || hash === '') {
+        setView('home');
+      } else if (hash.startsWith('#/mail/')) {
+        const folder = hash.replace('#/mail/', '').toUpperCase() as EmailFolder;
+        setView('mail');
+        setCurrentFolder(folder);
+      } else if (hash === '#/system-setup') {
+        setView('admin');
+      } else if (hash === '#/settings') {
+        setView('settings');
+      }
+    };
+
+    // Handle initial load
+    handleHashChange();
+
+    // Listen for hash changes (back/forward button)
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   const loadData = useCallback(async (refreshSelected = true) => {
     if (!isSupabaseConfigured) {
@@ -120,9 +148,27 @@ const App: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    const channel = supabase.channel('db-changes').on('postgres_changes', { event: '*', schema: 'public' }, () => { 
-      loadData(false);
-    }).subscribe();
+    
+    // Real-time subscription for new emails
+    const channel = supabase
+      .channel('email-changes')
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'emails' 
+      }, (payload) => { 
+        console.log('✉️ New email received!', payload);
+        loadData(false);
+      })
+      .on('postgres_changes', { 
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'email_domains' 
+      }, () => { 
+        loadData(false);
+      })
+      .subscribe();
+    
     return () => { supabase.removeChannel(channel); };
   }, [loadData]);
 
@@ -342,10 +388,23 @@ export default {
     `.trim();
   }, [selectedDomain, currentUser.id, supabaseUrl, supabaseKey, settingsUrl, settingsKey]);
 
-  const handleNavigate = (newView: 'home' | 'mail' | 'admin', folder?: EmailFolder) => {
+  const handleNavigate = (newView: 'info' | 'home' | 'mail' | 'admin' | 'settings', folder?: EmailFolder) => {
     setView(newView);
     if (folder) setCurrentFolder(folder);
     setIsMobileMenuOpen(false);
+    
+    // Update URL hash
+    if (newView === 'info') {
+      window.history.pushState({}, '', '#/info');
+    } else if (newView === 'home') {
+      window.history.pushState({}, '', '#/');
+    } else if (newView === 'mail' && folder) {
+      window.history.pushState({}, '', `#/mail/${folder.toLowerCase()}`);
+    } else if (newView === 'admin') {
+      window.history.pushState({}, '', '#/system-setup');
+    } else if (newView === 'settings') {
+      window.history.pushState({}, '', '#/settings');
+    }
   };
 
   return (
@@ -360,6 +419,7 @@ export default {
       <div className={`
         fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+        ${view === 'info' ? 'hidden' : ''}
       `}>
         <Sidebar 
           currentUser={currentUser} 
@@ -382,9 +442,15 @@ export default {
           <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
             <Menu className="w-6 h-6" />
           </button>
-          <span className="font-black text-xl text-blue-600">MailFlow</span>
+          <button onClick={() => handleNavigate('info')} className="font-black text-xl text-blue-600 hover:opacity-70 transition-opacity">
+            MailFlow
+          </button>
           <div className="w-10" />
         </div>
+
+        {view === 'info' && (
+          <InfoView stats={stats} onNavigate={handleNavigate} />
+        )}
 
         {view === 'home' && (
           <DashboardView 

@@ -11,7 +11,7 @@ interface DashboardViewProps {
   stats: { emails: number; domains: number; addresses: number };
   unreadCount: number;
   recentEmails: Email[];
-  onNavigate: (view: 'home' | 'mail' | 'admin', folder?: EmailFolder) => void;
+  onNavigate: (view: 'info' | 'home' | 'mail' | 'admin', folder?: EmailFolder) => void;
   onCompose: () => void;
 }
 
