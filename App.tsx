@@ -136,18 +136,67 @@ export default {
       const to = message.to;
       const subject = message.headers.get("subject") || "(No subject)";
       
-      // Get text and HTML content
+      // Get email content - read the raw email first
       let bodyText = "";
       let bodyHtml = "";
       
       try {
-        const { ok, value } = await message.text();
-        if (ok) {
-          bodyText = value;
-          bodyHtml = \`<pre>\${escapeHtml(value)}</pre>\`;
+        // Read raw email as text
+        const rawEmail = await new Response(message.raw).text();
+        
+        // Helper function to decode base64 with UTF-8 support
+        function decodeBase64UTF8(str) {
+          try {
+            // Remove whitespace
+            const cleaned = str.replace(/\\s/g, '');
+            // Decode base64 to binary
+            const binary = atob(cleaned);
+            // Convert binary to UTF-8
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+              bytes[i] = binary.charCodeAt(i);
+            }
+            // Decode UTF-8 bytes to string
+            const decoder = new TextDecoder('utf-8');
+            return decoder.decode(bytes);
+          } catch (e) {
+            console.log("Base64 decode error:", e.message);
+            return str;
+          }
         }
+        
+        // Extract plain text body (between Content-Type: text/plain and next boundary)
+        let textMatch = rawEmail.match(/Content-Type: text\\/plain[^\\r\\n]*(?:\\r?\\n[^:\\r\\n]+:[^\\r\\n]*)*\\r?\\n\\r?\\n([\\s\\S]*?)(?=\\r?\\n--)/i);
+        if (textMatch && textMatch[1]) {
+          let textContent = textMatch[1].trim();
+          // Check if this section uses base64 encoding
+          if (rawEmail.includes("Content-Transfer-Encoding: base64")) {
+            textContent = decodeBase64UTF8(textContent);
+          }
+          bodyText = textContent;
+        }
+        
+        // Extract HTML body (between Content-Type: text/html and next boundary)
+        let htmlMatch = rawEmail.match(/Content-Type: text\\/html[^\\r\\n]*(?:\\r?\\n[^:\\r\\n]+:[^\\r\\n]*)*\\r?\\n\\r?\\n([\\s\\S]*?)(?=\\r?\\n--)/i);
+        if (htmlMatch && htmlMatch[1]) {
+          let htmlContent = htmlMatch[1].trim();
+          // Check if this section uses base64 encoding
+          if (rawEmail.includes("Content-Transfer-Encoding: base64")) {
+            htmlContent = decodeBase64UTF8(htmlContent);
+          }
+          bodyHtml = htmlContent;
+        } else if (bodyText) {
+          bodyHtml = \`<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; max-width: 100%; overflow-wrap: break-word;">\${escapeHtml(bodyText)}</div>\`;
+        } else {
+          bodyText = "(No content)";
+          bodyHtml = "<p style='color: #888;'>(No content)</p>";
+        }
+        
+        console.log("✅ Email body extracted, length:", bodyText.length);
       } catch (e) {
         console.log("Could not parse email body:", e.message);
+        bodyText = "Could not parse email content";
+        bodyHtml = "<p style='color: #888;'>Could not parse email content</p>";
       }
 
       // Extract domain from recipient
@@ -185,8 +234,53 @@ export default {
 
       const domainId = domains[0].id;
       const ownerId = domains[0].owner_id;
+      const isVerified = domains[0].is_verified;
 
       console.log("Domain found:", domainId, "Owner:", ownerId);
+
+      // Auto-verify domain on first successful email
+      if (!isVerified) {
+        console.log("🔐 Auto-verifying domain...");
+        await fetch(\`\${SUPABASE_URL}/rest/v1/email_domains?id=eq.\${domainId}\`, {
+          method: "PATCH",
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": \`Bearer \${SUPABASE_KEY}\`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ is_verified: true })
+        });
+      }
+
+      // Auto-activate email address on first email received
+      const localPart = toParts[0];
+      console.log("🔍 Looking for address:", localPart);
+      const addressRes = await fetch(
+        \`\${SUPABASE_URL}/rest/v1/email_addresses?domain_id=eq.\${domainId}&local_part=eq.\${encodeURIComponent(localPart)}\`,
+        {
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": \`Bearer \${SUPABASE_KEY}\`,
+            "Accept": "application/json"
+          }
+        }
+      );
+
+      if (addressRes.ok) {
+        const addresses = await addressRes.json();
+        if (addresses && addresses.length > 0 && !addresses[0].is_active) {
+          console.log("✅ Activating address:", addresses[0].id);
+          await fetch(\`\${SUPABASE_URL}/rest/v1/email_addresses?id=eq.\${addresses[0].id}\`, {
+            method: "PATCH",
+            headers: {
+              "apikey": SUPABASE_KEY,
+              "Authorization": \`Bearer \${SUPABASE_KEY}\`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ is_active: true })
+          });
+        }
+      }
 
       // Insert email into database
       const insertRes = await fetch(\`\${SUPABASE_URL}/rest/v1/emails\`, {

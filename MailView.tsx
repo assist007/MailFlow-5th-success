@@ -267,9 +267,20 @@ export const MailView: React.FC<MailViewProps> = ({
                     
                     <div className="email-body text-slate-700 dark:text-slate-300 text-base lg:text-xl leading-relaxed prose prose-lg dark:prose-invert max-w-none font-medium">
                       {email.body_html ? (
-                        <div dangerouslySetInnerHTML={{ __html: email.body_html }} />
+                        <div 
+                          className="overflow-x-auto break-words" 
+                          style={{ 
+                            maxWidth: '100%', 
+                            wordWrap: 'break-word', 
+                            overflowWrap: 'break-word',
+                            wordBreak: 'break-word'
+                          }}
+                          dangerouslySetInnerHTML={{ __html: email.body_html }} 
+                        />
                       ) : (
-                        <div className="whitespace-pre-wrap">{email.body_text}</div>
+                        <div className="whitespace-pre-wrap break-words" style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}>
+                          {email.body_text}
+                        </div>
                       )}
                     </div>
 
