@@ -12,7 +12,7 @@ interface SidebarProps {
   sidebarMode: 'expanded' | 'collapsed' | 'hover';
   onSetSidebarMode: (mode: 'expanded' | 'collapsed' | 'hover') => void;
   unreadCount: number;
-  onSetView: (view: 'home' | 'mail' | 'admin') => void;
+  onSetView: (view: 'home' | 'mail' | 'admin' | 'settings') => void;
   onSetFolder: (folder: EmailFolder) => void;
   onOpenConfig: () => void;
   onOpenCompose: () => void;
@@ -129,7 +129,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => onSetView('admin')} 
             isCollapsed={isCurrentlyCollapsed}
           />
-          <SidebarItem icon={<Settings className="w-5 h-5" />} label="Settings" onClick={onOpenConfig} isCollapsed={isCurrentlyCollapsed} />
+          <SidebarItem 
+            icon={<Settings className="w-5 h-5" />} 
+            label="Worker Settings" 
+            active={view === 'settings'}
+            onClick={() => onSetView('settings')} 
+            isCollapsed={isCurrentlyCollapsed}
+          />
         </nav>
         
         {/* Theme Toggle */}

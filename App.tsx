@@ -17,6 +17,7 @@ import { Sidebar } from './Sidebar';
 import { MailView } from './MailView';
 import { InfrastructureView } from './InfrastructureView';
 import { DashboardView } from './DashboardView';
+import { SettingsView } from './SettingsView';
 import { Modals } from './Modals';
 
 const App: React.FC = () => {
@@ -29,7 +30,7 @@ const App: React.FC = () => {
   const [stats, setStats] = useState({ domains: 0, addresses: 0, emails: 0 });
   const [selectedDomain, setSelectedDomain] = useState<EmailDomain | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-  const [view, setView] = useState<'home' | 'mail' | 'admin'>('home');
+  const [view, setView] = useState<'home' | 'mail' | 'admin' | 'settings'>('home');
   const [isLoading, setIsLoading] = useState(true);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('mailflow_theme') as 'light' | 'dark') || 'light');
   const [sidebarMode, setSidebarMode] = useState<'expanded' | 'collapsed' | 'hover'>(() => (localStorage.getItem('mailflow_sidebar_mode') as any) || 'expanded');
@@ -41,6 +42,14 @@ const App: React.FC = () => {
   const [isAddDomainOpen, setIsAddDomainOpen] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmModalConfig, setConfirmModalConfig] = useState<any>(null);
+  
+  // Settings State - for dynamic Supabase config
+  const [settingsUrl, setSettingsUrl] = useState<string>(() => 
+    localStorage.getItem('mailflow_supabase_url') || supabaseUrl || ''
+  );
+  const [settingsKey, setSettingsKey] = useState<string>(() => 
+    localStorage.getItem('mailflow_supabase_key') || supabaseKey || ''
+  );
 
   const { key: supabaseKey, url: supabaseUrl } = getSupabaseConfig();
 
@@ -58,6 +67,12 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('mailflow_sidebar_mode', sidebarMode);
   }, [sidebarMode]);
+
+  // Handle Settings Save
+  const handleSettingsSave = () => {
+    localStorage.setItem('mailflow_supabase_url', settingsUrl);
+    localStorage.setItem('mailflow_supabase_key', settingsKey);
+  };
 
   const loadData = useCallback(async (refreshSelected = true) => {
     if (!isSupabaseConfigured) {
@@ -113,9 +128,16 @@ const App: React.FC = () => {
 
   const workerCode = useMemo(() => {
     if (!selectedDomain) return '';
+    const url = settingsUrl || supabaseUrl;
+    const key = settingsKey || supabaseKey;
+    
+    if (!url || !key) {
+      return "// ⚠️ Error: Supabase URL or Key not configured! Go to Settings to configure.";
+    }
+    
     return `
-const SUPABASE_URL = "${supabaseUrl}";
-const SUPABASE_KEY = "${supabaseKey}";
+const SUPABASE_URL = "${url}";
+const SUPABASE_KEY = "${key}";
 
 function escapeHtml(text) {
   const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
@@ -318,7 +340,7 @@ export default {
   }
 };
     `.trim();
-  }, [selectedDomain, currentUser.id, supabaseUrl, supabaseKey]);
+  }, [selectedDomain, currentUser.id, supabaseUrl, supabaseKey, settingsUrl, settingsKey]);
 
   const handleNavigate = (newView: 'home' | 'mail' | 'admin', folder?: EmailFolder) => {
     setView(newView);
@@ -416,6 +438,16 @@ export default {
             onDeleteDomain={(d) => { setConfirmModalConfig({type:'domain', id:d.id, label:d.domain}); setShowConfirmModal(true); }}
             onSimulateEmail={api.simulateIncomingEmail}
             onDeleteAddress={(a) => { setConfirmModalConfig({type:'address', id:a.id, label:`${a.local_part}@${selectedDomain?.domain}`}); setShowConfirmModal(true); }}
+          />
+        )}
+
+        {view === 'settings' && (
+          <SettingsView 
+            settingsUrl={settingsUrl}
+            settingsKey={settingsKey}
+            onSettingsUrlChange={setSettingsUrl}
+            onSettingsKeyChange={setSettingsKey}
+            onSave={handleSettingsSave}
           />
         )}
       </main>
