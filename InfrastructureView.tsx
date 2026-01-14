@@ -30,6 +30,7 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
   const [localLimit, setLocalLimit] = useState<number>(selectedDomain?.address_limit || 10);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [newLocalPart, setNewLocalPart] = useState('');
+  const [copySuccess, setCopySuccess] = useState<string>('');
 
   useEffect(() => {
     if (selectedDomain) {
@@ -47,8 +48,44 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
     }
   };
 
+  const showCopySuccess = (message: string) => {
+    setCopySuccess(message);
+    setTimeout(() => setCopySuccess(''), 3000);
+  };
+
+  const handleCopyWorkerCode = async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(workerCode);
+        showCopySuccess('✅ Worker Code copied!');
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = workerCode;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showCopySuccess('✅ Worker Code copied!');
+      }
+    } catch (error) {
+      console.error('Copy failed:', error);
+      alert('❌ Failed to copy. Please manually select and copy the code.');
+    }
+  };
+
   return (
-    <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-y-auto custom-scrollbar transition-colors">
+    <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-y-auto custom-scrollbar transition-colors relative">
+      {/* Copy Success Toast */}
+      {copySuccess && (
+        <div className="fixed top-8 right-8 z-50 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right fade-in duration-300">
+          <CheckCircle2 className="w-5 h-5" />
+          <span className="font-bold text-sm">{copySuccess}</span>
+        </div>
+      )}
+
       {/* Sticky Top Header */}
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/60 p-6 lg:px-12 lg:py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
@@ -136,7 +173,10 @@ export const InfrastructureView: React.FC<InfrastructureViewProps> = ({
                     <div className="bg-black/40 rounded-[24px] border border-white/10 p-6 backdrop-blur-md">
                       <div className="flex items-center justify-between mb-6">
                          <span className="text-[10px] font-black uppercase text-blue-400 tracking-widest">Worker Bridge Code</span>
-                         <button onClick={() => { navigator.clipboard.writeText(workerCode); alert("Code copied!"); }} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl transition-all text-[10px] font-black uppercase tracking-wider">
+                         <button 
+                           onClick={handleCopyWorkerCode} 
+                           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl transition-all text-[10px] font-black uppercase tracking-wider hover:scale-105 active:scale-95"
+                         >
                            <CopyCheck className="w-4 h-4" /> Copy Logic
                          </button>
                       </div>

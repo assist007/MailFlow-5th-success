@@ -165,4 +165,12 @@ CREATE POLICY "Public Access" ON public.email_attachments
   FOR ALL TO anon, authenticated
   USING (true) WITH CHECK (true);
 
+-- Add is_deleted column (if not exists)
+ALTER TABLE email_addresses ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+
+-- Create fast-lookup index
+CREATE INDEX IF NOT EXISTS idx_email_addresses_allowlist
+  ON public.email_addresses(domain_id, local_part)
+  WHERE is_active = TRUE AND is_deleted = FALSE;
+
 COMMIT;`;

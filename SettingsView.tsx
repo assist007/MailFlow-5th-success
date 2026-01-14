@@ -20,6 +20,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const [saved, setSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<'credentials' | 'cloud' | 'sql'>('credentials');
+  const [copySuccess, setCopySuccess] = useState<string>('');
   
   const { url: currentUrl, key: currentKey } = getSupabaseConfig();
   const storedSchema = getStoredSchema();
@@ -30,18 +31,69 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setSaved(false), 3000);
   };
   
-  const handleCopySQL = () => {
-    navigator.clipboard.writeText(INITIAL_SQL);
-    alert('SQL Blueprint copied!');
+  const showCopySuccess = (message: string) => {
+    setCopySuccess(message);
+    setTimeout(() => setCopySuccess(''), 3000);
   };
   
-  const handleCopyCloudUrl = () => {
-    navigator.clipboard.writeText(settingsUrl || currentUrl || '');
-    alert('Cloud URL copied!');
+  const handleCopySQL = async () => {
+    try {
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(INITIAL_SQL);
+        showCopySuccess('✅ SQL Blueprint copied!');
+      } else {
+        // Fallback method for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = INITIAL_SQL;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showCopySuccess('✅ SQL Blueprint copied!');
+      }
+    } catch (error) {
+      console.error('Copy failed:', error);
+      alert('❌ Failed to copy. Please manually select and copy the SQL code below.');
+    }
+  };
+  
+  const handleCopyCloudUrl = async () => {
+    try {
+      const urlToCopy = settingsUrl || currentUrl || '';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(urlToCopy);
+        showCopySuccess('✅ Cloud URL copied!');
+      } else {
+        // Fallback method
+        const textArea = document.createElement('textarea');
+        textArea.value = urlToCopy;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showCopySuccess('✅ Cloud URL copied!');
+      }
+    } catch (error) {
+      console.error('Copy failed:', error);
+      alert('❌ Failed to copy. Please manually select and copy the URL.');
+    }
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 overflow-y-auto custom-scrollbar transition-colors">
+    <div className="flex-1 flex flex-col bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 overflow-y-auto custom-scrollbar transition-colors relative">
+      {/* Copy Success Toast */}
+      {copySuccess && (
+        <div className="fixed top-8 right-8 z-50 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right fade-in duration-300">
+          <CheckCircle2 className="w-5 h-5" />
+          <span className="font-bold text-sm">{copySuccess}</span>
+        </div>
+      )}
+      
       <header className="sticky top-0 z-40 bg-gradient-to-r from-white to-slate-50 dark:from-slate-900/95 dark:to-slate-900 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 p-6 lg:px-12 lg:py-8 shadow-md">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center">
