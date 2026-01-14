@@ -321,11 +321,12 @@ export default {
         });
       }
 
-      // Auto-activate email address on first email received
+      // 🔒 SECURITY: Strict allowlist validation
       const localPart = toParts[0];
-      console.log("🔍 Looking for address:", localPart);
+      console.log("🔍 Security check: Validating address:", localPart);
+      
       const addressRes = await fetch(
-        \`\${SUPABASE_URL}/rest/v1/email_addresses?domain_id=eq.\${domainId}&local_part=eq.\${encodeURIComponent(localPart)}\`,
+        \`\${SUPABASE_URL}/rest/v1/email_addresses?domain_id=eq.\${domainId}&local_part=eq.\${encodeURIComponent(localPart)}&is_active=eq.true&is_deleted=eq.false\`,
         {
           headers: {
             "apikey": SUPABASE_KEY,
@@ -335,23 +336,41 @@ export default {
         }
       );
 
-      if (addressRes.ok) {
-        const addresses = await addressRes.json();
-        if (addresses && addresses.length > 0 && !addresses[0].is_active) {
-          console.log("✅ Activating address:", addresses[0].id);
-          await fetch(\`\${SUPABASE_URL}/rest/v1/email_addresses?id=eq.\${addresses[0].id}\`, {
-            method: "PATCH",
-            headers: {
-              "apikey": SUPABASE_KEY,
-              "Authorization": \`Bearer \${SUPABASE_KEY}\`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ is_active: true })
-          });
-        }
+      if (!addressRes.ok) {
+        console.error("❌ SECURITY: Address validation failed:", addressRes.status);
+        return;
       }
 
-      // Insert email into database
+      const addresses = await addressRes.json();
+      
+      // 🛑 REJECT: Address not in allowlist
+      if (!addresses || addresses.length === 0) {
+        console.warn("🛑 REJECTED: Email to", to, "- Address not in allowlist (unauthorized)");
+        console.warn("   From:", from);
+        console.warn("   Reason: Address not explicitly created in app");
+        return; // Stop processing - NO DB insert
+      }
+
+      const allowedAddress = addresses[0];
+      const addressUserId = allowedAddress.user_id;
+      
+      console.log("✅ SECURITY: Address validated -", to, "is in allowlist");
+      
+      // Auto-activate address on first email received
+      if (!allowedAddress.is_active) {
+        console.log("✅ Activating address:", allowedAddress.id);
+        await fetch(\`\${SUPABASE_URL}/rest/v1/email_addresses?id=eq.\${allowedAddress.id}\`, {
+          method: "PATCH",
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": \`Bearer \${SUPABASE_KEY}\`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ is_active: true })
+        });
+      }
+
+      // Insert email into database (only for allowed addresses)
       const insertRes = await fetch(\`\${SUPABASE_URL}/rest/v1/emails\`, {
         method: "POST",
         headers: {
@@ -369,7 +388,7 @@ export default {
           folder: "inbox",
           is_read: false,
           thread_id: \`thread_\${Date.now()}_\${Math.random().toString(36).substr(2, 9)}\`,
-          user_id: ownerId,
+          user_id: addressUserId, // Use validated address owner, not domain owner
           domain_id: domainId
         })
       });

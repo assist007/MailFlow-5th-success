@@ -215,30 +215,55 @@ class ApiService {
     }
   }
 
+  /**
+   * SECURITY: Simulate incoming email with strict allowlist validation
+   * Uses the same validation as real webhook emails
+   */
   async simulateIncomingEmail(toAddress: string): Promise<void> {
     this.checkConfig();
     try {
-      const [localPart, domainPart] = toAddress.split('@');
-      const { data: domain } = await supabase.from('email_domains').select('*').eq('domain', domainPart).single();
-      if (!domain) return;
-      const { data: addr } = await supabase.from('email_addresses').select('*').eq('local_part', localPart).eq('domain_id', domain.id).single();
-      if (!addr) return;
-      if (!addr.is_active) await supabase.from('email_addresses').update({ is_active: true }).eq('id', addr.id);
-      if (!domain.is_verified) await supabase.from('email_domains').update({ is_verified: true }).eq('id', domain.id);
+      // SECURITY: Check if address is in allowlist
+      const validation = await this.isAddressAllowed(toAddress);
 
+      if (!validation.allowed) {
+        // REJECT: Address not in allowlist
+        console.warn(`[SIMULATION_REJECTED] Email to ${toAddress} rejected - not in allowlist`);
+        alert(`❌ Email rejected!\n\nAddress "${toAddress}" is not in your allowlist.\n\nOnly explicitly created addresses can receive emails.`);
+        return;
+      }
+
+      // Address is allowed - proceed with simulation
+      const { address, domain } = validation;
+
+      // Auto-activate address on first email
+      if (!address!.is_active) {
+        await supabase.from('email_addresses').update({ is_active: true }).eq('id', address!.id);
+      }
+      
+      // Auto-verify domain on first email
+      if (!domain!.is_verified) {
+        await supabase.from('email_domains').update({ is_verified: true }).eq('id', domain!.id);
+      }
+
+      // Store email
       await supabase.from('emails').insert([{
-        from_address: 'bridge@secure.io',
+        from_address: 'me.emni786@gmail.com',
         to_address: toAddress,
-        subject: `Security Check: ${localPart}`,
-        body_html: `<p>Security bridge connected for address: <b>${toAddress}</b></p>`,
-        body_text: `Security bridge connected for address: ${toAddress}`,
+        subject: `Test Email for ${address!.local_part}`,
+        body_html: `<p>✅ Security validation passed!</p><p>This email was successfully delivered to <b>${toAddress}</b> because it is in your allowlist.</p>`,
+        body_text: `✅ Security validation passed! This email was successfully delivered to ${toAddress} because it is in your allowlist.`,
         folder: EmailFolder.INBOX,
         is_read: false,
         thread_id: `thread_${Date.now()}`,
-        user_id: addr.user_id,
-        domain_id: domain.id
+        user_id: address!.user_id,
+        domain_id: domain!.id
       }]);
-    } catch (err: any) { console.error("Simulation failed:", err.message); }
+
+      console.log(`[SIMULATION_SUCCESS] ✓ Email delivered to ${toAddress}`);
+    } catch (err: any) { 
+      console.error("Simulation failed:", err.message);
+      alert(`❌ Simulation failed: ${err.message}`);
+    }
   }
 
   /**
