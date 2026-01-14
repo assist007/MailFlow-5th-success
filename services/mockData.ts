@@ -3,8 +3,8 @@ import { User, UserRole, Email, EmailFolder, EmailDomain, EmailAddress } from '.
 
 export const mockCurrentUser: User = {
   id: 'user_1',
-  email: 'john@example.com',
-  role: UserRole.OWNER, // Changed from USER to OWNER
+  email: 'redwan@admin.com',
+  role: UserRole.OWNER,
   created_at: new Date().toISOString()
 };
 
