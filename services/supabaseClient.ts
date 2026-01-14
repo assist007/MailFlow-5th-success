@@ -5,8 +5,8 @@ const STORAGE_KEY_KEY = 'mailflow_supabase_key';
 const STORAGE_KEY_SCHEMA = 'mailflow_master_schema';
 
 // Default values (fallback if nothing in localStorage)
-const defaultUrl = 'https://pdpfepsdkywocipmyncq.supabase.co';
-const defaultKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkcGZlcHNka3l3b2NpcG15bmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc5NjA4MDYsImV4cCI6MjA4MzUzNjgwNn0.IN7FlWYCZTKqP_lhBhL7oFjXHKwJqQYWhuKTffxIMWs';
+const defaultUrl = 'https://irmxzvuzbacyqkmsiudp.supabase.co';
+const defaultKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlybXh6dnV6YmFjeXFrbXNpdWRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzMTY5ODIsImV4cCI6MjA4Mzg5Mjk4Mn0.L99pAWinTeDYoFqMyhbOsjepXxjba-l2whqit47Nlcc';
 
 export const getSupabaseConfig = () => {
   const url = localStorage.getItem(STORAGE_KEY_URL) || defaultUrl;

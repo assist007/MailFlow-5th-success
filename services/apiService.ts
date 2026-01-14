@@ -174,6 +174,26 @@ class ApiService {
       }]);
     } catch (err: any) { console.error("Simulation failed:", err.message); }
   }
+
+  async handleWebhookEmail(webhookData: any): Promise<void> {
+    this.checkConfig();
+    try {
+      const { from_address, to_address, subject, body_text, body_html, domain_id, user_id } = webhookData;
+      
+      await supabase.from('emails').insert([{
+        from_address,
+        to_address,
+        subject,
+        body_text,
+        body_html,
+        folder: EmailFolder.INBOX,
+        is_read: false,
+        thread_id: `thread_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        user_id,
+        domain_id
+      }]);
+    } catch (err: any) { throw this.handleError(err, 'handling webhook email'); }
+  }
 }
 
 export const api = new ApiService();

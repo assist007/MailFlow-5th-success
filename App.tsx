@@ -113,7 +113,117 @@ const App: React.FC = () => {
 
   const workerCode = useMemo(() => {
     if (!selectedDomain) return '';
-    return `export default { async email(message, env, ctx) { } };`;
+    return `
+const SUPABASE_URL = "${supabaseUrl}";
+const SUPABASE_KEY = "${supabaseKey}";
+
+function escapeHtml(text) {
+  const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+export default {
+  async fetch(request) {
+    return new Response("Email Worker is running", { status: 200 });
+  },
+
+  async email(message, env, ctx) {
+    console.log("📧 Email received:", message.from, "→", message.to);
+    
+    try {
+      // Parse email
+      const from = message.from;
+      const to = message.to;
+      const subject = message.headers.get("subject") || "(No subject)";
+      
+      // Get text and HTML content
+      let bodyText = "";
+      let bodyHtml = "";
+      
+      try {
+        const { ok, value } = await message.text();
+        if (ok) {
+          bodyText = value;
+          bodyHtml = \`<pre>\${escapeHtml(value)}</pre>\`;
+        }
+      } catch (e) {
+        console.log("Could not parse email body:", e.message);
+      }
+
+      // Extract domain from recipient
+      const toParts = to.split("@");
+      if (!toParts[1]) {
+        console.error("Invalid recipient address:", to);
+        return;
+      }
+      
+      const domain = toParts[1];
+
+      // Get domain ID from Supabase
+      console.log("Querying Supabase for domain:", domain);
+      const domainRes = await fetch(
+        \`\${SUPABASE_URL}/rest/v1/email_domains?domain=eq.\${encodeURIComponent(domain)}\`,
+        {
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": \`Bearer \${SUPABASE_KEY}\`,
+            "Accept": "application/json"
+          }
+        }
+      );
+
+      if (!domainRes.ok) {
+        console.error("Domain query failed:", domainRes.status, await domainRes.text());
+        return;
+      }
+
+      const domains = await domainRes.json();
+      if (!domains || !Array.isArray(domains) || domains.length === 0) {
+        console.log("Domain not found in database:", domain);
+        return;
+      }
+
+      const domainId = domains[0].id;
+      const ownerId = domains[0].owner_id;
+
+      console.log("Domain found:", domainId, "Owner:", ownerId);
+
+      // Insert email into database
+      const insertRes = await fetch(\`\${SUPABASE_URL}/rest/v1/emails\`, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": \`Bearer \${SUPABASE_KEY}\`,
+          "Content-Type": "application/json",
+          "Prefer": "return=representation"
+        },
+        body: JSON.stringify({
+          from_address: from,
+          to_address: to,
+          subject: subject,
+          body_text: bodyText || "",
+          body_html: bodyHtml || "",
+          folder: "inbox",
+          is_read: false,
+          thread_id: \`thread_\${Date.now()}_\${Math.random().toString(36).substr(2, 9)}\`,
+          user_id: ownerId,
+          domain_id: domainId
+        })
+      });
+
+      if (!insertRes.ok) {
+        const errorText = await insertRes.text();
+        console.error("❌ Failed to insert email:", insertRes.status, errorText);
+      } else {
+        const inserted = await insertRes.json();
+        console.log("✅ Email stored in database:", inserted[0]?.id);
+      }
+    } catch (error) {
+      console.error("🔴 Worker error:", error.message, error.stack);
+    }
+  }
+};
+    `.trim();
   }, [selectedDomain, currentUser.id, supabaseUrl, supabaseKey]);
 
   const handleNavigate = (newView: 'home' | 'mail' | 'admin', folder?: EmailFolder) => {
