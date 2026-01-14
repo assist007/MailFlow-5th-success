@@ -44,6 +44,9 @@ const App: React.FC = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmModalConfig, setConfirmModalConfig] = useState<any>(null);
   
+  // Get Supabase config first
+  const { key: supabaseKey, url: supabaseUrl } = getSupabaseConfig();
+  
   // Settings State - for dynamic Supabase config
   const [settingsUrl, setSettingsUrl] = useState<string>(() => 
     localStorage.getItem('mailflow_supabase_url') || supabaseUrl || ''
@@ -51,8 +54,6 @@ const App: React.FC = () => {
   const [settingsKey, setSettingsKey] = useState<string>(() => 
     localStorage.getItem('mailflow_supabase_key') || supabaseKey || ''
   );
-
-  const { key: supabaseKey, url: supabaseUrl } = getSupabaseConfig();
 
   // Apply Theme
   useEffect(() => {
