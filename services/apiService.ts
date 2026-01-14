@@ -141,12 +141,78 @@ class ApiService {
         const { data: dom } = await supabase.from('email_domains').select('domain').eq('id', addr.domain_id).single();
         if (dom) {
           const fullEmail = `${addr.local_part}@${dom.domain}`;
+          // Hard delete emails associated with this address
           await supabase.from('emails').delete().or(`to_address.eq.${fullEmail},from_address.eq.${fullEmail}`);
         }
       }
+      // Hard delete the address (remove completely from allowlist)
       const { error } = await supabase.from('email_addresses').delete().eq('id', addressId);
       if (error) throw error;
     } catch (err: any) { throw this.handleError(err, 'deleting address'); }
+  }
+
+  /**
+   * SECURITY: Verify if an email address is in the allowlist
+   * Only explicitly created addresses can receive emails
+   * Returns null if address is NOT allowed (unauthorized)
+   */
+  private async isAddressAllowed(toAddress: string): Promise<{ allowed: boolean; address: EmailAddress | null; domain: EmailDomain | null }> {
+    try {
+      const [localPart, domainPart] = toAddress.split('@');
+      if (!localPart || !domainPart) {
+        return { allowed: false, address: null, domain: null };
+      }
+
+      // 1. Check if domain exists
+      const { data: domain } = await supabase
+        .from('email_domains')
+        .select('*')
+        .eq('domain', domainPart.toLowerCase())
+        .eq('is_active', true)
+        .single();
+
+      if (!domain) {
+        // Domain doesn't exist - REJECT
+        console.warn(`[SECURITY] Rejected email to ${toAddress}: Domain not registered`);
+        return { allowed: false, address: null, domain: null };
+      }
+
+      // 2. Check if address is in allowlist (NOT hard-deleted, is_active, and exists)
+      const { data: address } = await supabase
+        .from('email_addresses')
+        .select('*')
+        .eq('domain_id', domain.id)
+        .eq('local_part', localPart.toLowerCase())
+        .eq('is_active', true)
+        .eq('is_deleted', false)
+        .single();
+
+      if (!address) {
+        // Address not in allowlist or is deleted - REJECT (NO processing at all)
+        console.warn(`[SECURITY] Rejected email to ${toAddress}: Address not in allowlist`);
+        return { allowed: false, address: null, domain };
+      }
+
+      return { allowed: true, address, domain };
+    } catch (err: any) {
+      console.error('[SECURITY] Error checking address allowlist:', err);
+      // Fail-safe: reject if any error occurs
+      return { allowed: false, address: null, domain: null };
+    }
+  }
+
+  /**
+   * SECURITY: Log rejected emails for monitoring
+   * Prevents anonymous storage of attempted unauthorized access
+   */
+  private async logRejectedEmail(toAddress: string, fromAddress: string, reason: string): Promise<void> {
+    try {
+      // Optional: Log to a system audit table if you want to track attempts
+      // For now, just log to console for security monitoring
+      console.log(`[REJECTED_EMAIL] To: ${toAddress} | From: ${fromAddress} | Reason: ${reason}`);
+    } catch (err: any) {
+      console.error('[AUDIT_LOG_ERROR]:', err);
+    }
   }
 
   async simulateIncomingEmail(toAddress: string): Promise<void> {
@@ -175,12 +241,36 @@ class ApiService {
     } catch (err: any) { console.error("Simulation failed:", err.message); }
   }
 
-  async handleWebhookEmail(webhookData: any): Promise<void> {
+  /**
+   * SECURITY: Handle inbound webhook emails with strict allowlist validation
+   * 
+   * PROCESS:
+   * 1. Check if to_address is in the allowlist (explicitly created in app)
+   * 2. If NOT allowed: IMMEDIATELY REJECT/DROP - NO processing, NO DB insert
+   * 3. If allowed: Process normally and store email
+   */
+  async handleWebhookEmail(webhookData: any): Promise<{ success: boolean; rejected: boolean; reason?: string }> {
     this.checkConfig();
     try {
       const { from_address, to_address, subject, body_text, body_html, domain_id, user_id } = webhookData;
-      
-      await supabase.from('emails').insert([{
+
+      // SECURITY: Validate that to_address is in allowlist
+      const validation = await this.isAddressAllowed(to_address);
+
+      if (!validation.allowed) {
+        // REJECT: Do NOT process, do NOT store, do NOT create mailbox
+        await this.logRejectedEmail(to_address, from_address, 'Address not in allowlist (unauthorized)');
+        
+        // Return rejection response for webhook caller
+        return {
+          success: false,
+          rejected: true,
+          reason: 'Address not authorized to receive emails'
+        };
+      }
+
+      // Address is allowed - process the email
+      const { data: createdEmail, error } = await supabase.from('emails').insert([{
         from_address,
         to_address,
         subject,
@@ -189,10 +279,22 @@ class ApiService {
         folder: EmailFolder.INBOX,
         is_read: false,
         thread_id: `thread_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        user_id,
-        domain_id
-      }]);
-    } catch (err: any) { throw this.handleError(err, 'handling webhook email'); }
+        user_id: validation.address!.user_id, // Use address owner, not external provided user_id
+        domain_id: validation.domain!.id // Use validated domain, not external provided domain_id
+      }]).select().single();
+
+      if (error) throw error;
+
+      // Auto-activate address on first successful email
+      if (!validation.address!.is_active) {
+        await supabase.from('email_addresses').update({ is_active: true }).eq('id', validation.address!.id);
+      }
+
+      console.log(`[EMAIL_RECEIVED] ${from_address} → ${to_address}`);
+      return { success: true, rejected: false };
+    } catch (err: any) { 
+      throw this.handleError(err, 'handling webhook email'); 
+    }
   }
 }
 

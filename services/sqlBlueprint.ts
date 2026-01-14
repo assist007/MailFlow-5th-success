@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS public.email_domains (
 );
 
 -- =========================
--- 2) email_addresses
+-- 2) email_addresses (Allowlist of explicitly created addresses)
 -- =========================
 CREATE TABLE IF NOT EXISTS public.email_addresses (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -39,11 +39,19 @@ CREATE TABLE IF NOT EXISTS public.email_addresses (
 
   is_catch_all BOOLEAN DEFAULT FALSE,
   is_active    BOOLEAN DEFAULT TRUE,
+  
+  -- Hard delete flag: if true, future inbound emails to this address are rejected
+  is_deleted   BOOLEAN DEFAULT FALSE,
 
   created_at   TIMESTAMPTZ DEFAULT NOW(),
 
   UNIQUE (local_part, domain_id)
 );
+
+-- Composite index for fast allowlist lookup
+CREATE INDEX IF NOT EXISTS idx_email_addresses_allowlist
+  ON public.email_addresses(domain_id, local_part)
+  WHERE is_active = TRUE AND is_deleted = FALSE;
 
 -- =========================
 -- 3) emails

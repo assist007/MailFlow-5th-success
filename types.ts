@@ -57,6 +57,7 @@ export interface EmailAddress {
   user_id: string;
   is_catch_all: boolean;
   is_active: boolean;
+  is_deleted: boolean; // Hard delete flag: when true, future inbound emails are rejected
   created_at: string;
 }
 
